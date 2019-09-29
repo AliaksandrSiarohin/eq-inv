@@ -23,20 +23,27 @@ def train(dataset, generatorA, discriminatorA, generatorB, discriminatorB,  logg
         optimizer_generatorA = torch.optim.Adam(generatorA.parameters(), lr=2e-4, betas=(0, 0.9))
         optimizer_discriminatorA = torch.optim.Adam(discriminatorA.parameters(), lr=2e-4, betas=(0, 0.9))
 
-    optimizer_generatorB = torch.optim.Adam(generatorA.parameters(), lr=2e-4, betas=(0, 0.9))
-    optimizer_discriminatorB = torch.optim.Adam(discriminatorA.parameters(), lr=2e-4, betas=(0, 0.9))
+    optimizer_generatorB = torch.optim.Adam(generatorB.parameters(), lr=2e-4, betas=(0, 0.9))
+    optimizer_discriminatorB = torch.optim.Adam(discriminatorB.parameters(), lr=2e-4, betas=(0, 0.9))
 
     loader = DataLoader(dataset, batch_size=args.bs, shuffle=False, drop_last=True, num_workers=4)
     images_fixed = None
-    for epoch in tqdm(args.num_epochs):
+    for epoch in tqdm(range(args.num_epochs)):
         loss_dict = defaultdict(lambda: 0.0)
         iteration_count = 1
-        for inp in loader:
+        for inp in tqdm(loader):
             images_A = inp['A'].cuda()
             images_B = inp['B'].cuda()
 
-            if images_fixed is not None:
+            if images_fixed is None:
                 images_fixed = {'A': images_A, 'B': images_B}
+                logger.save_images(epoch=epoch, generated=generatorB(images_fixed['A']), original=images_fixed['A'],
+                           direction='AtoB')
+
+                if args.cycle_loss_weight != 0:
+                    logger.save_images(epoch=epoch, generated=generatorB(images_fixed['B']), original=images_fixed['B'],
+                           direction='BtoA')
+
 
             if args.identity_loss_weight != 0:
                 images_trg = generatorB(images_B)
@@ -59,7 +66,6 @@ def train(dataset, generatorA, discriminatorA, generatorB, discriminatorB,  logg
                 images_generatedB = generatorB(images_A)
                 logits = discriminatorB(images_generatedB)
                 adversarial_loss = -logits.mean()
-                adversarial_loss.backward()
                 generator_loss += adversarial_loss
 
                 loss_dict['adversarial_loss_B'] += adversarial_loss.detach().cpu().numpy()
@@ -68,7 +74,6 @@ def train(dataset, generatorA, discriminatorA, generatorB, discriminatorB,  logg
                 images_generatedA = generatorA(images_B)
                 logits = discriminatorA(images_generatedA)
                 adversarial_loss = -logits.mean()
-                adversarial_loss.backward()
                 generator_loss += adversarial_loss
 
                 loss_dict['adversarial_loss_A'] += adversarial_loss.detach().cpu().numpy()
@@ -131,7 +136,7 @@ def train(dataset, generatorA, discriminatorA, generatorB, discriminatorB,  logg
             logger.save_images(epoch=epoch, generated=generatorB(images_fixed['B']), original=images_fixed['B'],
                            direction='BtoA')
 
-        logger.log({key: value / iteration_count for key, value in loss_dict.items()})
+        logger.log(epoch, {key: value / iteration_count for key, value in loss_dict.items()})
 
 
 if __name__ == "__main__":
@@ -145,8 +150,8 @@ if __name__ == "__main__":
     parser.add_argument('--cycle_loss_weight', type=float, default=10)
 
     parser.add_argument('--adversarial_loss_weight', type=float, default=1)
-    parser.add_argument('--root_dir', default='dataset/maps')
-    parser.add_argument('--bs', type=int, default=256)
+    parser.add_argument('--root_dir', default='../pytorch-CycleGAN-and-pix2pix/datasets/maps/')
+    parser.add_argument('--bs', type=int, default=4)
 
     args = parser.parse_args()
 

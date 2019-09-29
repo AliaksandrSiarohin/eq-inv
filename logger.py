@@ -2,6 +2,7 @@ import os
 import torch
 from util import denorm
 from collections import OrderedDict
+from torchvision.utils import save_image
 
 class Logger:
     def __init__(self, log_dir, log_file='log.txt', vis_dir='train-vis'):
@@ -11,7 +12,7 @@ class Logger:
 
         self.vis_dir = os.path.join(log_dir, vis_dir)
         if not os.path.exists(self.vis_dir):
-            os.makedirs(vis_dir)
+            os.makedirs(self.vis_dir)
 
         self.cpk_dir = log_dir
 
@@ -23,14 +24,14 @@ class Logger:
     def save_images(self, epoch, direction, original, generated):
         x_concat = torch.cat([original, generated], dim=2)
         sample_path = os.path.join(self.vis_dir, str(epoch).zfill(5) + direction + '.png')
-        torch.save_image(denorm(x_concat.data.cpu()), sample_path, nrow=2, padding=0)
+        save_image(denorm(x_concat.data.cpu()), sample_path, nrow=4, padding=0)
 
-    def log(self, scores):
+    def log(self, epoch, scores):
         result = ''
-        for key, value in OrderedDict(scores):
+        for key, value in OrderedDict(scores).items():
             result += '{}:{:.2f} '.format(key, value)
         with open(self.log_file, 'a') as f:
-            print(result, file=f)
+            print('{})'.format(str(epoch).zfill(3)) + result, file=f)
 
 
 

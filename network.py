@@ -33,7 +33,7 @@ class Generator(nn.Module):
         self.final = nn.Conv2d(block_expansion, num_channels, kernel_size=(7, 7), padding=(3, 3))
         self.num_channels = num_channels
 
-    def forward(self, source_image, kp_driving, kp_source):
+    def forward(self, source_image):
         out = self.first(source_image)
         for i in range(len(self.down_blocks)):
             out = self.down_blocks[i](out)
@@ -67,7 +67,7 @@ class Discriminator(nn.Module):
         if sn:
            self.conv = nn.utils.spectral_norm(self.conv)
 
-    def forward(self, x, kp=None):
+    def forward(self, x):
         out = x
         for down_block in self.down_blocks:
             out = down_block(out)
