@@ -15,7 +15,7 @@ import os
 
 class Trainer:
     def __init__(self, logger, checkpoint, device_ids, config):
-        self.BtoA = config.cycle_loss_weight != 0
+        self.BtoA = config['cycle_loss_weight'] != 0
         self.config = config
         self.logger = logger
         self.device_ids = device_ids
@@ -39,23 +39,23 @@ class Trainer:
     def restore(self, checkpoint):
         self.epoch = 0
 
-        self.generatorB = Generator(**self.config.generator_params)
+        self.generatorB = Generator(**self.config['generator_params'])
         self.generatorB = DataParallelWithCallback(self.generatorB, device_ids=self.device_ids)
         self.optimizer_generatorB = torch.optim.Adam(self.generatorB.parameters(),
                                                      lr=self.config['lr_generator'], betas=(0, 0.9))
 
-        self.discriminatorB = Discriminator(**self.config.discriminator_params)
+        self.discriminatorB = Discriminator(**self.config['discriminator_params'])
         self.discriminatorB = DataParallelWithCallback(self.discriminatorB, device_ids=self.device_ids)
         self.optimizer_discriminatorB = torch.optim.Adam(self.discriminatorB.parameters(),
                                                          lr=self.config['lr_discriminator'], betas=(0, 0.9))
 
         if self.BtoA:
-            self.generatorA = Generator(**self.config.discriminator_params)
+            self.generatorA = Generator(**self.config['discriminator_params'])
             self.generatorA = DataParallelWithCallback(self.generatorA, device_ids=self.device_ids)
             self.optimizer_generatorA = torch.optim.Adam(self.generatorA.parameters(),
                                                          lr=self.config['lr_generator'], betas=(0, 0.9))
 
-            self.discriminatorA = Discriminator(**self.config.generator_params)
+            self.discriminatorA = Discriminator(**self.config['generator_params'])
             self.discriminatorA = DataParallelWithCallback(self.discriminatorA, device_ids=self.device_ids)
             self.optimizer_discriminatorA = torch.optim.Adam(self.discriminatorA.parameters(),
                                                              lr=self.config['lr_discriminator'], betas=(0, 0.9))
@@ -98,9 +98,9 @@ class Trainer:
 
     def train(self):
         loader = DataLoader(self.dataset, batch_size=self.config['bs'], shuffle=False,
-                            drop_last=True, num_workers=self.config)
+                            drop_last=True, num_workers=4)
         images_fixed = None
-        for self.epoch in tqdm(range(self.epoch, self.config.num_epochs)):
+        for self.epoch in tqdm(range(self.epoch, self.config['num_epochs'])):
             loss_dict = defaultdict(lambda: 0.0)
             iteration_count = 1
             for inp in tqdm(loader):
@@ -110,18 +110,18 @@ class Trainer:
                 if images_fixed is None:
                     images_fixed = {'A': images_A, 'B': images_B}
 
-                if self.config.identity_loss_weight != 0:
+                if self.config['identity_loss_weight'] != 0:
                     images_trg = self.generatorB(images_B)
                     identity_loss = torch.abs(images_trg - images_B).mean()
-                    identity_loss = self.config.identity_loss_weight * identity_loss
+                    identity_loss = self.config['identity_loss_weight'] * identity_loss
                     identity_loss.backward()
 
                     loss_dict['identity_loss_B'] += identity_loss.detach().cpu().numpy()
 
-                if self.config.identity_loss_weight != 0 and self.BtoA:
+                if self.config['identity_loss_weight'] != 0 and self.BtoA:
                     images_trg = self.generatorA(images_A)
                     identity_loss = torch.abs(images_trg - images_A).mean()
-                    identity_loss = self.config.identity_loss_weight * identity_loss
+                    identity_loss = self.config['identity_loss_weight'] * identity_loss
                     identity_loss.backward()
 
                     loss_dict['identity_loss_A'] += identity_loss.detach().cpu().numpy()
@@ -130,7 +130,7 @@ class Trainer:
                 images_generatedB = self.generatorB(images_A)
                 logits = self.discriminatorB(images_generatedB)
                 adversarial_loss = -logits.mean()
-                adversarial_loss = self.config.adversarial_loss_weight * adversarial_loss
+                adversarial_loss = self.config['adversarial_loss_weight'] * adversarial_loss
                 generator_loss += adversarial_loss
                 loss_dict['adversarial_loss_B'] += adversarial_loss.detach().cpu().numpy()
 
@@ -138,20 +138,20 @@ class Trainer:
                     images_generatedA = self.generatorA(images_B)
                     logits = self.discriminatorA(images_generatedA)
                     adversarial_loss = -logits.mean()
-                    adversarial_loss = self.config.adversarial_loss_weight * adversarial_loss
+                    adversarial_loss = self.config['adversarial_loss_weight'] * adversarial_loss
                     generator_loss += adversarial_loss
                     loss_dict['adversarial_loss_A'] += adversarial_loss.detach().cpu().numpy()
 
-                if self.BtoA and self.config.cycle_loss_weight != 0:
+                if self.BtoA and self.config['cycle_loss_weight'] != 0:
                     images_cycled = self.generatorA(images_generatedB)
                     cycle_loss = torch.abs(images_cycled - images_generatedB).mean()
-                    cycle_loss = self.config.cycle_loss_weight * cycle_loss
+                    cycle_loss = self.config['cycle_loss_weight'] * cycle_loss
                     generator_loss += cycle_loss
                     loss_dict['cycle_loss_B'] += cycle_loss.detach().cpu().numpy()
 
                     images_cycled = self.generatorB(images_generatedA)
                     cycle_loss = torch.abs(images_cycled - images_generatedA).mean()
-                    cycle_loss = self.config.cycle_loss_weight * cycle_loss
+                    cycle_loss = self.config['cycle_loss_weight'] * cycle_loss
                     generator_loss += cycle_loss
                     loss_dict['cycle_loss_A'] += cycle_loss.detach().cpu().numpy()
 
