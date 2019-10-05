@@ -29,8 +29,8 @@ class ABDataset(Dataset):
         idx_A = np.random.randint(len(self.A))
         idx_B = np.random.randint(len(self.B))
 
-        image_A = Image.open(os.path.join(self.dir_A, self.A[idx_A]))
-        image_B = Image.open(os.path.join(self.dir_B, self.B[idx_B]))
+        image_A = Image.open(os.path.join(self.dir_A, self.A[idx_A])).convert('RGB')
+        image_B = Image.open(os.path.join(self.dir_B, self.B[idx_B])).convert('RGB')
         if self.transform is not None:
             image_A = self.transform(image_A)
             image_B = self.transform(image_B)

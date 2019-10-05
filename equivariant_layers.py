@@ -59,7 +59,7 @@ class EqDownBlock2d(nn.Module):
         self.conv = P4MConvP4M(in_channels=in_features, out_channels=out_features, kernel_size=kernel_size,
                                padding=padding)
         self.norm = BatchNorm3d(out_features, affine=True)
-        self.pool = nn.AvgPool2d(kernel_size=(2, 2))
+        self.pool = nn.AvgPool3d(kernel_size=(1, 2, 2))
 
     def forward(self, x):
         out = self.conv(x)
@@ -127,5 +127,5 @@ class EqDiscriminatorBlock(nn.Module):
             out = self.norm(out)
         out = F.leaky_relu(out, 0.2)
         if self.pool:
-            out = F.avg_pool2d(out, (2, 2))
+            out = F.avg_pool3d(out, (1, 2, 2))
         return out

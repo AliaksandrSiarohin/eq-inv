@@ -26,7 +26,7 @@ class Logger:
     def log(self, epoch, scores):
         result = ''
         for key, value in OrderedDict(scores).items():
-            result += '{}:{:.2f} '.format(key, value)
+            result += '{}:{:.5f} '.format(key, value)
         with open(self.log_file, 'a') as f:
             print('{})'.format(str(epoch).zfill(3)) + result, file=f)
 

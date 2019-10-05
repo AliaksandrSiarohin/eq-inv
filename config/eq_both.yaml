@@ -1,5 +1,5 @@
 # Main parameters
-root_dir: '../pytorch-CycleGAN-and-pix2pix/datasets/maps/'
+root_dir: '../pytorch-CycleGAN-and-pix2pix/datasets/horse2zebra'
 
 # Architecre Parameters
 
@@ -8,23 +8,23 @@ generator_params:
   block_expansion: 22
   num_down_blocks: 2
   num_bottleneck_blocks: 6
-  max_features: 256
+  max_features: 91
 
 discriminator_params:
   equivariance: 'p4m'
   block_expansion: 22
   num_blocks: 4
-  max_features: 512
-  sn: True
+  max_features: 182
+  sn: False
 
 # Train parameters
 num_epochs: 200
-epoch_milestoens: [100, 150]
-lr_generator: 2e-4
-lr_discriminator: 2e-4
-bs: 4
 
-identity_loss_weigh: 10
+lr_generator: 1.0e-4
+lr_discriminator: 4.0e-4
+bs: 20
+
+identity_loss_weight: 100
 cycle_loss_weight: 0
 adversarial_loss_weight: 1
 

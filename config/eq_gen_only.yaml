@@ -4,7 +4,7 @@ root_dir: '../pytorch-CycleGAN-and-pix2pix/datasets/maps/'
 # Architecre Parameters
 
 generator_params:
-  equivariance: null
+  equivariance: 'p4m'
   block_expansion: 22
   num_down_blocks: 2
   num_bottleneck_blocks: 6
@@ -19,12 +19,12 @@ discriminator_params:
 
 # Train parameters
 num_epochs: 200
-epoch_milestoens: [100, 150]
-lr_generator: 2e-4
-lr_discriminator: 2e-4
+epoch_milestones: [100, 150]
+lr_generator: 2.0e-4
+lr_discriminator: 2.0e-4
 bs: 4
 
-identity_loss_weigh: 10
+identity_loss_weight: 100
 cycle_loss_weight: 0
 adversarial_loss_weight: 1
 

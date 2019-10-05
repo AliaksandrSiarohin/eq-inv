@@ -11,11 +11,11 @@ generator_params:
   max_features: 256
 
 discriminator_params:
-  equivariance: null
-  block_expansion: 64
+  equivariance: 'p4m'
+  block_expansion: 22
   num_blocks: 4
   max_features: 512
-  sn: True
+  sn: False
 
 # Train parameters
 num_epochs: 200
@@ -25,6 +25,6 @@ lr_discriminator: 2.0e-4
 bs: 4
 
 identity_loss_weight: 10
-cycle_loss_weight: 10
+cycle_loss_weight: 0
 adversarial_loss_weight: 1
 
