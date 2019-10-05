@@ -1,6 +1,6 @@
 from groupy.gconv.pytorch_gconv import P4MConvZ2, P4MConvP4M
 from torch import nn
-from sync_batchnorm import SynchronizedBatchNorm2d as BatchNorm3d
+from sync_batchnorm import _SynchronizedBatchNorm as BatchNorm3d
 import torch.nn.functional as F
 
 
