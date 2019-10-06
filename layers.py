@@ -17,10 +17,10 @@ class AdaBN(nn.Module):
         self.norm_target.bias = self.norm_source.bias
 
     def forward(self, x, source):
-        #if source:
-        out = self.norm_source(x)
-        #else:
-        #   out = self.norm_target(x)
+        if source:
+            out = self.norm_source(x)
+        else:
+            out = self.norm_target(x)
 
         return out
 
