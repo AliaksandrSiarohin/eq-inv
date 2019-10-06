@@ -3,8 +3,26 @@ import torch.nn.functional as F
 from torch import nn
 
 from equivariant_layers import P4MConvP4M, P4MConvZ2
-from sync_batchnorm import SynchronizedBatchNorm2d as BatchNorm
+from sync_batchnorm import _SynchronizedBatchNorm as BatchNorm
 
+
+class AdaBN(nn.Module):
+    def __init__(self, in_features):
+        super(AdaBN, self).__init__()
+
+        self.norm_source = BatchNorm(in_features, affine=True)
+        self.norm_target = BatchNorm(in_features, affine=True)
+
+        self.norm_target.weight = self.norm_source.weight
+        self.norm_target.bias = self.norm_source.bias
+
+    def forward(self, x, source):
+        if source:
+           out = self.norm_source(x)
+        else:
+           out = self.norm_target(x)
+
+        return out
 
 class ResBlock2d(nn.Module):
     """
@@ -26,14 +44,14 @@ class ResBlock2d(nn.Module):
             self.conv2 = P4MConvP4M(in_channels=in_features, out_channels=in_features, kernel_size=kernel_size,
                                     padding=padding)
 
-        self.norm1 = BatchNorm(in_features, affine=True)
-        self.norm2 = BatchNorm(in_features, affine=True)
+        self.norm1 = AdaBN(in_features)
+        self.norm2 = AdaBN(in_features)
 
-    def forward(self, x):
-        out = self.norm1(x)
+    def forward(self, x, source = True):
+        out = self.norm1(x, source)
         out = F.relu(out)
         out = self.conv1(out)
-        out = self.norm2(out)
+        out = self.norm2(out, source)
         out = F.relu(out)
         out = self.conv2(out)
         out += x
@@ -63,12 +81,12 @@ class UpBlock2d(nn.Module):
         else:
             self.interpolation_mode = mode.replace('bi', 'tri')
             self.scale_factor = (1, 2, 2)
-        self.norm = BatchNorm(out_features, affine=True)
+        self.norm = AdaBN(out_features)
 
-    def forward(self, x):
+    def forward(self, x, source=True):
         out = F.interpolate(x, scale_factor=self.scale_factor, mode=self.interpolation_mode)
         out = self.conv(out)
-        out = self.norm(out)
+        out = self.norm(out, source)
         out = F.relu(out)
         return out
 
@@ -89,20 +107,20 @@ class DownBlock2d(nn.Module):
         else:
             self.conv = P4MConvP4M(in_channels=in_features, out_channels=out_features, kernel_size=kernel_size,
                                    padding=padding)
-        self.norm = BatchNorm(out_features, affine=True)
+        self.norm = AdaBN(out_features) 
 
         if equivariance is None and pool == 'avg':
             self.pool = nn.AvgPool2d(kernel_size=(2, 2))
 
         if equivariance is not None and pool == 'avg':
-            self.pool = nn.AdaptiveAvgPool3d(kernel_size=(1, 2, 2))
+            self.pool = nn.AvgPool3d(kernel_size=(1, 2, 2))
 
         if pool == 'blur':
             self.pool = AntiAliasConv(stride=2)
 
-    def forward(self, x):
+    def forward(self, x, source=True):
         out = self.conv(x)
-        out = self.norm(out)
+        out = self.norm(out, source)
         out = F.relu(out)
         out = self.pool(out)
         return out
@@ -130,16 +148,16 @@ class SameBlock2d(nn.Module):
                                        kernel_size=kernel_size, padding=padding)
 
         if not last:
-            self.norm = BatchNorm(out_features, affine=True)
+            self.norm = AdaBN(out_features)
 
-        self.group_pool = last and (self.equivariance is not None)
+        self.group_pool = last and (equivariance is not None)
 
-    def forward(self, x):
+    def forward(self, x, source=True):
         out = self.conv(x)
         if self.group_pool:
             out = out.max(dim=2)[0]
             return out
-        out = self.norm(out)
+        out = self.norm(out, source)
         out = F.relu(out)
         return out
 
@@ -166,7 +184,7 @@ class DiscriminatorBlock(nn.Module):
             self.conv = nn.utils.spectral_norm(self.conv)
 
         if norm:
-            self.norm = torch.nn.modules.instancenorm._InstanceNorm(out_features, affine=True)
+            self.norm = _InstanceNorm(out_features, affine=True)
         else:
             self.norm = None
 
@@ -174,12 +192,15 @@ class DiscriminatorBlock(nn.Module):
             self.pool = nn.AvgPool2d(kernel_size=(2, 2))
 
         if equivariance is not None and pool == 'avg':
-            self.pool = nn.AdaptiveAvgPool3d(kernel_size=(1, 2, 2))
+            self.pool = nn.AvgPool3d(kernel_size=(1, 2, 2))
 
         if pool == 'blur':
             self.pool = AntiAliasConv(stride=2)
+         
+        if pool is None:
+            self.pool = None
 
-        self.group_pool = last and (self.equivariance is not None)
+        self.group_pool = last and (equivariance is not None)
 
     def forward(self, x):
         out = x
@@ -193,6 +214,53 @@ class DiscriminatorBlock(nn.Module):
         if self.pool:
             out = self.pool(out)
         return out
+
+
+class _InstanceNorm(torch.nn.modules.batchnorm._BatchNorm):
+    def __init__(self, num_features, eps=1e-5, momentum=0.1, affine=False,
+                 track_running_stats=False):
+        super(_InstanceNorm, self).__init__(
+            num_features, eps, momentum, affine, track_running_stats)
+
+    def _check_input_dim(self, input):
+        None
+
+    def _load_from_state_dict(self, state_dict, prefix, local_metadata, strict,
+                              missing_keys, unexpected_keys, error_msgs):
+        version = local_metadata.get('version', None)
+        # at version 1: removed running_mean and running_var when
+        # track_running_stats=False (default)
+        if version is None and not self.track_running_stats:
+            running_stats_keys = []
+            for name in ('running_mean', 'running_var'):
+                key = prefix + name
+                if key in state_dict:
+                    running_stats_keys.append(key)
+            if len(running_stats_keys) > 0:
+                error_msgs.append(
+                    'Unexpected running stats buffer(s) {names} for {klass} '
+                    'with track_running_stats=False. If state_dict is a '
+                    'checkpoint saved before 0.4.0, this may be expected '
+                    'because {klass} does not track running stats by default '
+                    'since 0.4.0. Please remove these keys from state_dict. If '
+                    'the running stats are actually needed, instead set '
+                    'track_running_stats=True in {klass} to enable them. See '
+                    'the documentation of {klass} for details.'
+                        .format(names=" and ".join('"{}"'.format(k) for k in running_stats_keys),
+                                klass=self.__class__.__name__))
+                for key in running_stats_keys:
+                    state_dict.pop(key)
+
+        super(_InstanceNorm, self)._load_from_state_dict(
+            state_dict, prefix, local_metadata, strict,
+            missing_keys, unexpected_keys, error_msgs)
+
+    def forward(self, input):
+        self._check_input_dim(input)
+
+        return F.instance_norm(
+            input, self.running_mean, self.running_var, self.weight, self.bias,
+            self.training or not self.track_running_stats, self.momentum, self.eps)
 
 
 class AntiAliasConv(nn.Module):
@@ -223,7 +291,7 @@ class AntiAliasConv(nn.Module):
         if len(shape) != 4:
             input = input.permute([0] + list(range(2, len(shape) - 2)) + [1, -2, -1])
             before_view_shape = list(input.shape)
-            input = input.view(-1, shape[1], shape[-2], shape[-1])
+            input = input.contiguous().view(-1, shape[1], shape[-2], shape[-1])
 
         out = F.pad(input, (self.ka, self.kb, self.ka, self.kb))
 
@@ -239,6 +307,6 @@ class AntiAliasConv(nn.Module):
             before_view_shape[-1] = out.shape[-1]
             before_view_shape[-2] = out.shape[-2]
             out = out.view(*before_view_shape)
-            out = out.permute([0, -3] + list(range(1, len(shape) - 3)) + [-2, -1])
+            out = out.permute([0, -3] + list(range(1, len(shape) - 3)) + [-2, -1]).contiguous()
 
         return out

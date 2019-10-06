@@ -33,25 +33,28 @@ class Generator(nn.Module):
                                        equivariance=equivariance, mode=upsample_mode))
         self.up_blocks = nn.ModuleList(up_blocks)
 
-        self.bottleneck = torch.nn.Sequential()
+        bottleneck = []
         in_features = min(max_features, block_expansion * (2 ** num_down_blocks))
         for i in range(num_bottleneck_blocks):
-            self.bottleneck.add_module('r' + str(i), ResBlock2d(in_features, kernel_size=3, padding=1,
-                                                                equivariance=equivariance))
+            bottleneck.append(ResBlock2d(in_features, kernel_size=3, padding=1,
+                                         equivariance=equivariance))
+        self.bottleneck = nn.ModuleList(bottleneck)
 
         self.final = SameBlock2d(block_expansion, num_channels, kernel_size=7, padding=3,
                                  equivariance=equivariance, last=True)
         self.num_channels = num_channels
 
-    def forward(self, source_image):
-        out = self.first(source_image)
+    def forward(self, source_image, source):
+        out = self.first(source_image, source)
         for i in range(len(self.down_blocks)):
-            out = self.down_blocks[i](out)
+            out = self.down_blocks[i](out, source)
 
-        out = self.bottleneck(out)
+        for i in range(len(self.bottleneck)):
+            out = self.bottleneck[i](out, source)
+
         for i in range(len(self.up_blocks)):
-            out = self.up_blocks[i](out)
-        out = self.final(out)
+            out = self.up_blocks[i](out, source)
+        out = self.final(out, source)
         out = F.tanh(out)
 
         return out

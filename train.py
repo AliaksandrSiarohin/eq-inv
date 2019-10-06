@@ -29,7 +29,7 @@ class Trainer:
         print(self.discriminatorB)
 
         transform = list()
-        transform.append(T.RandomResizedCrop(256, scale=(0.9, 0.9), ratio=(1, 1)))
+        transform.append(T.RandomResizedCrop(256))#, scale=(0.9, 0.9), ratio=(1, 1)))
         transform.append(T.ToTensor())
         transform.append(T.Normalize(mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5)))
         transform = T.Compose(transform)
@@ -113,7 +113,7 @@ class Trainer:
                     images_fixed = {'A': images_A, 'B': images_B}
 
                 if self.config['identity_loss_weight'] != 0:
-                    images_trg = self.generatorB(images_B)
+                    images_trg = self.generatorB(images_B, source=False)
                     identity_loss = torch.abs(images_trg - images_B).mean()
                     identity_loss = self.config['identity_loss_weight'] * identity_loss
                     identity_loss.backward()
@@ -121,7 +121,7 @@ class Trainer:
                     loss_dict['identity_loss_B'] += identity_loss.detach().cpu().numpy()
 
                 if self.config['identity_loss_weight'] != 0 and self.BtoA:
-                    images_trg = self.generatorA(images_A)
+                    images_trg = self.generatorA(images_A, source=False)
                     identity_loss = torch.abs(images_trg - images_A).mean()
                     identity_loss = self.config['identity_loss_weight'] * identity_loss
                     identity_loss.backward()
@@ -129,7 +129,7 @@ class Trainer:
                     loss_dict['identity_loss_A'] += identity_loss.detach().cpu().numpy()
 
                 generator_loss = 0
-                images_generatedB = self.generatorB(images_A)
+                images_generatedB = self.generatorB(images_A, source=True)
                 logits = self.discriminatorB(images_generatedB)
                 adversarial_loss = -logits.mean()
                 adversarial_loss = self.config['adversarial_loss_weight'] * adversarial_loss
@@ -138,20 +138,20 @@ class Trainer:
 
                 if self.BtoA:
                     images_generatedA = self.generatorA(images_B)
-                    logits = self.discriminatorA(images_generatedA)
+                    logits = self.discriminatorA(images_generatedA, source=True)
                     adversarial_loss = -logits.mean()
                     adversarial_loss = self.config['adversarial_loss_weight'] * adversarial_loss
                     generator_loss += adversarial_loss
                     loss_dict['adversarial_loss_A'] += adversarial_loss.detach().cpu().numpy()
 
                 if self.BtoA and self.config['cycle_loss_weight'] != 0:
-                    images_cycled = self.generatorA(images_generatedB)
+                    images_cycled = self.generatorA(images_generatedB, source=True)
                     cycle_loss = torch.abs(images_cycled - images_A).mean()
                     cycle_loss = self.config['cycle_loss_weight'] * cycle_loss
                     generator_loss += cycle_loss
                     loss_dict['cycle_loss_B'] += cycle_loss.detach().cpu().numpy()
 
-                    images_cycled = self.generatorB(images_generatedA)
+                    images_cycled = self.generatorB(images_generatedA, source=True)
                     cycle_loss = torch.abs(images_cycled - images_B).mean()
                     cycle_loss = self.config['cycle_loss_weight'] * cycle_loss
                     generator_loss += cycle_loss
@@ -199,17 +199,25 @@ class Trainer:
 
             with torch.no_grad():
                 if not self.BtoA:
-                    self.logger.save_images(self.epoch, images_fixed['A'], self.generatorB(images_fixed['A']),
+                    self.generatorB.eval()
+                    self.logger.save_images(self.epoch, images_fixed['A'], self.generatorB(images_fixed['A'], source=True),
                                             images_fixed['A'].permute(0, 1, 3, 2),
-                                            self.generatorB(images_fixed['A'].permute(0, 1, 3, 2)))
+                                            self.generatorB(images_fixed['A'].permute(0, 1, 3, 2), source=True))
+                    self.generatorB.train()
                 else:
-                    images_generatedB = self.generatorB(images_fixed['A'])
-                    images_generatedA = self.generatorA(images_fixed['B'])
+                    self.generatorA.eval()
+                    self.generatorB.eval()
+ 
+                    images_generatedB = self.generatorB(images_fixed['A'], source=True)
+                    images_generatedA = self.generatorA(images_fixed['B'], source=True)
                     self.logger.save_images(self.epoch,
                                             images_fixed['A'], images_generatedB,
-                                            images_fixed['A'].permute(0, 1, 3, 2), self.generatorB(images_fixed['A'].permute(0, 1, 3, 2)),
-                                            self.generatorA(images_generatedB), images_fixed['B'], 
-                                            images_generatedA, self.generatorB(images_generatedA))
+                                            images_fixed['A'].permute(0, 1, 3, 2), self.generatorB(images_fixed['A'].permute(0, 1, 3, 2), source=True),
+                                            self.generatorA(images_generatedB, source=True), images_fixed['B'], 
+                                            images_generatedA, self.generatorB(images_generatedA, source=True))
+
+                    self.generatorA.train()
+                    self.generatorB.train()
 
             self.scheduler_generatorB.step()
             self.scheduler_discriminatorB.step()

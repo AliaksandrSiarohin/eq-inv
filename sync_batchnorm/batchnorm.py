@@ -45,6 +45,9 @@ class _SynchronizedBatchNorm(_BatchNorm):
         self._parallel_id = None
         self._slave_pipe = None
 
+    def _check_input_dim(self, input):
+        None
+
     def forward(self, input):
         # If it is not parallel computation or is in evaluation mode, use PyTorch's implementation.
         if not (self._is_parallel and self.training):
