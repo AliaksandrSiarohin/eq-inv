@@ -71,12 +71,12 @@ class Discriminator(nn.Module):
         for i in range(num_blocks):
             in_channels = num_channels if i == 0 else min(max_features, block_expansion * (2 ** (i - 1)))
             out_channels = min(max_features, block_expansion * (2 ** i))
-            block = DiscriminatorBlock(in_channels, out_channels, norm=(i != 0), lift=(i == 0),
+            block = DiscriminatorBlock(in_channels, out_channels, norm=(i != 0), lift=(i == 0), equivariance=equivariance,
                                        kernel_size=5, padding=2, pool=None if (i == num_blocks - 1) else pool, sn=sn)
             blocks.append(block)
 
         blocks.append(DiscriminatorBlock(blocks[-1].conv.out_channels, 1, kernel_size=1, norm=False, pool=None,
-                                         last=True, sn=sn))
+                                         last=True, sn=sn, equivariance=equivariance))
 
         self.blocks = nn.ModuleList(blocks)
 

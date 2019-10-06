@@ -9,15 +9,15 @@ generator_params:
   num_down_blocks: 2
   num_bottleneck_blocks: 6
   max_features: 91
-  pool: 'blur'
-  upsample_mode: 'bilinear'
+  pool: 'avg'
+  upsample_mode: 'nearest'
 
 discriminator_params:
   equivariance: 'p4m'
   block_expansion: 22
   num_blocks: 4
   max_features: 182
-  pool: 'blur'
+  pool: 'avg'
   sn: False
 
 # Train parameters
