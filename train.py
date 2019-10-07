@@ -1,17 +1,16 @@
-import torch
-
+import os
 from collections import defaultdict
 
-from sync_batchnorm import DataParallelWithCallback
-from torchvision import transforms as T
+import numpy as np
+import torch
 from torch.utils.data import DataLoader
-from torch.optim.lr_scheduler import MultiStepLR
-
+from torchvision import transforms as T
 from tqdm import tqdm
+
 from ab_dataset import ABDataset
 from network import Generator, Discriminator
-import os
-import numpy as np
+from sync_batchnorm import DataParallelWithCallback
+
 
 class Trainer:
     def __init__(self, logger, checkpoint, device_ids, config):
@@ -29,7 +28,8 @@ class Trainer:
         print(self.discriminatorB)
 
         transform = list()
-        transform.append(T.RandomResizedCrop(256))#, scale=(0.9, 0.9), ratio=(1, 1)))
+        transform.append(T.Resize(config['load_size']))
+        transform.append(T.RandomCrop(config['crop_size']))
         transform.append(T.ToTensor())
         transform.append(T.Normalize(mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5)))
         transform = T.Compose(transform)
@@ -62,7 +62,7 @@ class Trainer:
 
         if checkpoint is not None:
             data = torch.load(checkpoint)
-            for key, value in data:
+            for key, value in data.items():
                 if key == 'epoch':
                     self.epoch = value
                 else:
@@ -70,15 +70,15 @@ class Trainer:
 
         lr_lambda = lambda epoch: min(1, 2 - 2 * epoch / self.config['num_epochs'])
         self.scheduler_generatorB = torch.optim.lr_scheduler.LambdaLR(self.optimizer_generatorB, lr_lambda,
-                                                                     last_epoch=self.epoch - 1)
+                                                                      last_epoch=self.epoch - 1)
         self.scheduler_discriminatorB = torch.optim.lr_scheduler.LambdaLR(self.optimizer_discriminatorB, lr_lambda,
-                                                                         last_epoch=self.epoch - 1)
+                                                                          last_epoch=self.epoch - 1)
 
         if self.BtoA:
             self.scheduler_generatorA = torch.optim.lr_scheduler.LambdaLR(self.optimizer_generatorA, lr_lambda,
-                                                                     last_epoch=self.epoch - 1)
+                                                                          last_epoch=self.epoch - 1)
             self.scheduler_discriminatorA = torch.optim.lr_scheduler.LambdaLR(self.optimizer_discriminatorA, lr_lambda,
-                                                                     last_epoch=self.epoch - 1)
+                                                                              last_epoch=self.epoch - 1)
 
     def save(self):
         state_dict = {'epoch': self.epoch,
@@ -200,20 +200,22 @@ class Trainer:
             with torch.no_grad():
                 if not self.BtoA:
                     self.generatorB.eval()
-                    self.logger.save_images(self.epoch, images_fixed['A'], self.generatorB(images_fixed['A'], source=True),
+                    self.logger.save_images(self.epoch, images_fixed['A'],
+                                            self.generatorB(images_fixed['A'], source=True),
                                             images_fixed['A'].permute(0, 1, 3, 2),
                                             self.generatorB(images_fixed['A'].permute(0, 1, 3, 2), source=True))
                     self.generatorB.train()
                 else:
                     self.generatorA.eval()
                     self.generatorB.eval()
- 
+
                     images_generatedB = self.generatorB(images_fixed['A'], source=True)
                     images_generatedA = self.generatorA(images_fixed['B'], source=True)
                     self.logger.save_images(self.epoch,
                                             images_fixed['A'], images_generatedB,
-                                            images_fixed['A'].permute(0, 1, 3, 2), self.generatorB(images_fixed['A'].permute(0, 1, 3, 2), source=True),
-                                            self.generatorA(images_generatedB, source=True), images_fixed['B'], 
+                                            images_fixed['A'].permute(0, 1, 3, 2),
+                                            self.generatorB(images_fixed['A'].permute(0, 1, 3, 2), source=True),
+                                            self.generatorA(images_generatedB, source=True), images_fixed['B'],
                                             images_generatedA, self.generatorB(images_generatedA, source=True))
 
                     self.generatorA.train()
@@ -225,7 +227,7 @@ class Trainer:
                 self.scheduler_generatorA.step()
                 self.scheduler_discriminatorA.step()
 
-            save_dict = {key: value / iteration_count for key, value in loss_dict.items()} 
+            save_dict = {key: value / iteration_count for key, value in loss_dict.items()}
             save_dict['lr'] = self.optimizer_generatorB.param_groups[0]['lr']
 
             self.logger.log(self.epoch, save_dict)

@@ -1,6 +1,7 @@
 # Main parameters
 root_dir: '../pytorch-CycleGAN-and-pix2pix/datasets/horse2zebra'
-
+load_size: 286
+crop_size: 256
 # Architecre Parameters
 
 generator_params:
