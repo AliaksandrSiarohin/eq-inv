@@ -57,12 +57,15 @@ class BN(nn.Module):
     def __init__(self, in_features, type):
         super(BN, self).__init__()
 
-        assert type in ['bn', 'adabn', 'instance']
+        assert type in [None, 'bn', 'adabn', 'instance']
+
         if type.endswith('bn'):
             self.norm_source = BatchNorm(in_features, affine=True)
-        else:
+        elif type == 'instance':
             self.norm_source = _InstanceNorm(in_features, affine=True)
-
+        else:
+            self.norm_source = Identity()
+            
         if type == 'adabn':
             self.norm_target = BatchNorm(in_features, affine=True)
 
