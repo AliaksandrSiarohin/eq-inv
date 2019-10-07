@@ -1,47 +1,46 @@
-import torch
 import torch.nn.functional as F
 from torch import nn
 
-from layers import ResBlock2d, SameBlock2d, UpBlock2d, DownBlock2d, DiscriminatorBlock
+from layers import ResBlock2d, UpBlock2d, Block2d
 
 
 class Generator(nn.Module):
-    def __init__(self, num_channels=3, block_expansion=64, max_features=256, num_down_blocks=2, num_bottleneck_blocks=6,
-                 equivariance=None, pool='avg', upsample_mode='nearest'):
-        super(Generator, self).__init__()
-        assert equivariance in [None, 'p4m']
-        assert pool in ['avg', 'blur']
-        assert upsample_mode in ['nearest', 'bilinear']
+    def __init__(self, num_channels=3, block_expansion=64, num_down_blocks=2, num_bottleneck_blocks=6,
+                 equivariance=None, scales=1, pool='avg', upsample='nearest', sn=False, bn='instance',
+                 group_pool='avg'):
+        assert group_pool in ['max', 'avg']
 
-        self.first = SameBlock2d(num_channels, block_expansion, kernel_size=7, padding=3,
-                                 lift=True, equivariance=equivariance)
+        super(Generator, self).__init__()
+
+        self.first = Block2d(num_channels, block_expansion, kernel_size=7, padding=3, pool_type=None,
+                             lift=True, equivariance=equivariance, scales=scales, sn=sn, bn_type=bn)
 
         down_blocks = []
         for i in range(num_down_blocks):
-            in_features = min(max_features, block_expansion * (2 ** i))
-            out_features = min(max_features, block_expansion * (2 ** (i + 1)))
-            down_blocks.append(DownBlock2d(in_features, out_features, kernel_size=3, padding=1,
-                                           equivariance=equivariance, pool=pool))
+            in_features = block_expansion * (2 ** i)
+            out_features = block_expansion * (2 ** (i + 1))
+            down_blocks.append(Block2d(in_features, out_features, kernel_size=3, padding=1, bn_type=bn,
+                                       equivariance=equivariance, pool_type=pool, scales=scales, sn=sn))
 
         self.down_blocks = nn.ModuleList(down_blocks)
 
         up_blocks = []
         for i in range(num_down_blocks):
-            in_features = min(max_features, block_expansion * (2 ** (num_down_blocks - i)))
-            out_features = min(max_features, block_expansion * (2 ** (num_down_blocks - i - 1)))
-            up_blocks.append(UpBlock2d(in_features, out_features, kernel_size=3, padding=1,
-                                       equivariance=equivariance, mode=upsample_mode))
+            in_features = block_expansion * (2 ** (num_down_blocks - i))
+            out_features = block_expansion * (2 ** (num_down_blocks - i - 1))
+            up_blocks.append(UpBlock2d(in_features, out_features, kernel_size=3, padding=1, scales=scales,
+                                       equivariance=equivariance, upsample_type=upsample, bn_type=bn))
         self.up_blocks = nn.ModuleList(up_blocks)
 
         bottleneck = []
-        in_features = min(max_features, block_expansion * (2 ** num_down_blocks))
+        in_features = block_expansion * (2 ** num_down_blocks)
         for i in range(num_bottleneck_blocks):
-            bottleneck.append(ResBlock2d(in_features, kernel_size=3, padding=1,
-                                         equivariance=equivariance))
+            bottleneck.append(ResBlock2d(in_features, kernel_size=3, padding=1, scales=scales,
+                                         equivariance=equivariance, bn_type=bn, sn=sn))
         self.bottleneck = nn.ModuleList(bottleneck)
 
-        self.final = SameBlock2d(block_expansion, num_channels, kernel_size=7, padding=3,
-                                 equivariance=equivariance, last=True)
+        self.final = Block2d(block_expansion, num_channels, kernel_size=7, padding=3,
+                             equivariance=equivariance, scales=scales, bn_type=None, sn=sn, group_pool=group_pool)
         self.num_channels = num_channels
 
     def forward(self, source_image, source):
@@ -61,22 +60,24 @@ class Generator(nn.Module):
 
 
 class Discriminator(nn.Module):
-    def __init__(self, num_channels=3, block_expansion=64, num_blocks=4, max_features=512,
-                 sn=True, equivariance=None, pool='avg'):
+    def __init__(self, num_channels=3, block_expansion=64, num_blocks=4,
+                 equivariance=None, scales=1, pool='avg', sn=False, bn='instance', group_pool='avg'):
         super(Discriminator, self).__init__()
-        assert equivariance in [None, 'p4m']
-        self.equivariance = equivariance
+        assert group_pool in ['max', 'avg']
 
         blocks = []
         for i in range(num_blocks):
-            in_channels = num_channels if i == 0 else min(max_features, block_expansion * (2 ** (i - 1)))
-            out_channels = min(max_features, block_expansion * (2 ** i))
-            block = DiscriminatorBlock(in_channels, out_channels, norm=(i != 0), lift=(i == 0), equivariance=equivariance,
-                                       kernel_size=5, padding=0, pool=None if (i == num_blocks - 1) else pool, sn=sn)
+            in_channels = num_channels if i == 0 else block_expansion * (2 ** (i - 1))
+            out_channels = block_expansion * (2 ** i)
+            block = Block2d(in_channels, out_channels, bn_type=None if (i == 0) else bn,
+                            lift=(i == 0), equivariance=equivariance, scales=scales, sn=sn,
+                            kernel_size=5, padding=2, pool_type=None if (i == num_blocks - 1) else pool,
+                            activation='leaky_relu')
             blocks.append(block)
 
-        blocks.append(DiscriminatorBlock(blocks[-1].conv.out_channels, 1, kernel_size=1, norm=False, pool=None,
-                                         last=True, sn=sn, equivariance=equivariance))
+        blocks.append(Block2d(blocks[-1].conv.out_channels, 1, kernel_size=1, padding=1,
+                              bn_type=None, pool_type=None, group_pool=group_pool,
+                              sn=sn, equivariance=equivariance, scales=scales))
 
         self.blocks = nn.ModuleList(blocks)
 

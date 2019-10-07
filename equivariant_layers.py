@@ -1,131 +1,132 @@
-from groupy.gconv.pytorch_gconv import P4MConvZ2, P4MConvP4M
-from torch import nn
-from sync_batchnorm import _SynchronizedBatchNorm as BatchNorm3d
+import math
+
+import torch
+import torch.nn as nn
 import torch.nn.functional as F
+from groupy.gconv.make_gconv_indices import *
+from torch.nn import Parameter
+from torch.nn.modules.utils import _pair
+
+make_indices_functions = {(1, 4): make_c4_z2_indices,
+                          (4, 4): make_c4_p4_indices,
+                          (1, 8): make_d4_z2_indices,
+                          (8, 8): make_d4_p4m_indices}
 
 
-class EqResBlock2d(nn.Module):
-    """
-    Res block, preserve spatial resolution.
-    """
-
-    def __init__(self, in_features, kernel_size, padding):
-        super(EqResBlock2d, self).__init__()
-        self.conv1 = P4MConvP4M(in_channels=in_features, out_channels=in_features, kernel_size=kernel_size,
-                                padding=padding)
-        self.conv2 = P4MConvP4M(in_channels=in_features, out_channels=in_features, kernel_size=kernel_size,
-                                padding=padding)
-        self.norm1 = BatchNorm3d(in_features, affine=True)
-        self.norm2 = BatchNorm3d(in_features, affine=True)
-
-    def forward(self, x):
-        out = self.norm1(x)
-        out = F.relu(out)
-        out = self.conv1(out)
-        out = self.norm2(out)
-        out = F.relu(out)
-        out = self.conv2(out)
-        out += x
-        return out
+def trans_filter(w, inds):
+    inds_reshape = inds.reshape((-1, inds.shape[-1])).astype(np.int64)
+    w_indexed = w[:, :, inds_reshape[:, 0].tolist(), inds_reshape[:, 1].tolist(), inds_reshape[:, 2].tolist()]
+    w_indexed = w_indexed.view(w_indexed.size()[0], w_indexed.size()[1],
+                               inds.shape[0], inds.shape[1], inds.shape[2], inds.shape[3])
+    w_transformed = w_indexed.permute(0, 2, 1, 3, 4, 5)
+    return w_transformed.contiguous()
 
 
-class EqUpBlock2d(nn.Module):
-    """
-    Simple block for processing video (decoder).
-    """
+class SplitGConv2D(nn.Module):
+    def __init__(self, in_channels, out_channels, kernel_size, stride=1, scale_equivariance=False,
+                 padding=0, bias=True, input_stabilizer_size=1, output_stabilizer_size=4, operator=F.conv2d):
+        super(SplitGConv2D, self).__init__()
+        assert (input_stabilizer_size, output_stabilizer_size) in make_indices_functions.keys()
+        self.ksize = kernel_size
 
-    def __init__(self, in_features, out_features, kernel_size=3, padding=1):
-        super(EqUpBlock2d, self).__init__()
+        kernel_size = _pair(kernel_size)
+        stride = _pair(stride)
+        padding = _pair(padding)
 
-        self.conv = P4MConvP4M(in_channels=in_features, out_channels=out_features, kernel_size=kernel_size,
-                               padding=padding)
-        self.norm = BatchNorm3d(out_features, affine=True)
+        self.in_channels = in_channels
+        self.out_channels = out_channels
+        self.kernel_size = kernel_size
+        self.stride = stride
+        self.padding = padding
+        self.input_stabilizer_size = input_stabilizer_size
+        self.output_stabilizer_size = output_stabilizer_size
 
-    def forward(self, x):
-        out = F.interpolate(x, scale_factor=(1, 2, 2))
-        out = self.conv(out)
-        out = self.norm(out)
-        out = F.relu(out)
-        return out
-
-
-class EqDownBlock2d(nn.Module):
-    """
-    Simple block for processinGg video (encoder).
-    """
-
-    def __init__(self, in_features, out_features, kernel_size=3, padding=1):
-        super(EqDownBlock2d, self).__init__()
-        self.conv = P4MConvP4M(in_channels=in_features, out_channels=out_features, kernel_size=kernel_size,
-                               padding=padding)
-        self.norm = BatchNorm3d(out_features, affine=True)
-        self.pool = nn.AvgPool3d(kernel_size=(1, 2, 2))
-
-    def forward(self, x):
-        out = self.conv(x)
-        out = self.norm(out)
-        out = F.relu(out)
-        out = self.pool(out)
-        return out
-
-
-class EqFirstBlock2d(nn.Module):
-    """
-    Simple block with group convolution.
-    """
-
-    def __init__(self, in_features, out_features, kernel_size=7, padding=3):
-        super(EqFirstBlock2d, self).__init__()
-        self.conv = P4MConvZ2(in_channels=in_features, out_channels=out_features,
-                              kernel_size=kernel_size, padding=padding)
-        self.norm = BatchNorm3d(out_features, affine=True)
-
-    def forward(self, x):
-        out = self.conv(x)
-        out = self.norm(out)
-        out = F.relu(out)
-        return out
-
-
-class EqLastBlock2d(nn.Module):
-    """
-    Simple block with group convolution.
-    """
-
-    def __init__(self, in_features, out_features, kernel_size=7, padding=3):
-        super(EqLastBlock2d, self).__init__()
-        self.conv = P4MConvP4M(in_channels=in_features, out_channels=out_features,
-                               kernel_size=kernel_size, padding=padding)
-
-    def forward(self, x):
-        out = self.conv(x)
-        out = out.max(dim=2)[0]
-        return out
-
-
-class EqDiscriminatorBlock(nn.Module):
-    def __init__(self, in_features, out_features, norm=False, kernel_size=4, pool=False, sn=False, first=False):
-        super(EqDiscriminatorBlock, self).__init__()
-        if first:
-            self.conv = P4MConvZ2(in_channels=in_features, out_channels=out_features, kernel_size=kernel_size)
+        self.weight = Parameter(torch.Tensor(
+            out_channels, in_channels, self.input_stabilizer_size, *kernel_size))
+        if bias:
+            self.bias = Parameter(torch.Tensor(out_channels))
         else:
-            self.conv = P4MConvP4M(in_channels=in_features, out_channels=out_features, kernel_size=kernel_size)
+            self.register_parameter('bias', None)
+        self.reset_parameters()
+        self.scale_equivariance = scale_equivariance
+        self.operator = operator
 
-        if sn:
-            self.conv = nn.utils.spectral_norm(self.conv)
+        self.inds = self.make_transformation_indices()
 
-        if norm:
-            self.norm = nn.InstanceNorm3d(out_features, affine=True)
+    def reset_parameters(self):
+        n = self.in_channels
+        for k in self.kernel_size:
+            n *= k
+        stdv = 1. / math.sqrt(n)
+        self.weight.data.uniform_(-stdv, stdv)
+        if self.bias is not None:
+            self.bias.data.uniform_(-stdv, stdv)
+
+    def make_transformation_indices(self):
+        return make_indices_functions[(self.input_stabilizer_size, self.output_stabilizer_size)](self.ksize)
+
+    def forward(self, input):
+        tw = trans_filter(self.weight, self.inds)
+        tw_shape = (self.out_channels * self.output_stabilizer_size,
+                    self.in_channels * self.input_stabilizer_size,
+                    self.ksize, self.ksize)
+        tw = tw.view(tw_shape)
+
+        input_shape = input.size()
+
+        if not self.scale_equivariance:
+            input = input.view(input_shape[0], self.in_channels * self.input_stabilizer_size, input_shape[-2],
+                               input_shape[-1])
+
+            y = F.conv2d(input, weight=tw, bias=None, stride=self.stride,
+                         padding=self.padding)
+            batch_size, _, ny_out, nx_out = y.size()
+            y = y.view(batch_size, self.out_channels, self.output_stabilizer_size, ny_out, nx_out)
+
+            if self.bias is not None:
+                bias = self.bias.view(1, self.out_channels, 1, 1, 1)
+                y = y + bias
+
+            return y
         else:
-            self.norm = None
-        self.pool = pool
+            input = input.view(input_shape[0], self.in_channels * self.input_stabilizer_size,
+                               input_shape[-3], input_shape[-2], input_shape[-1])
 
-    def forward(self, x):
-        out = x
-        out = self.conv(out)
-        if self.norm:
-            out = self.norm(out)
-        out = F.leaky_relu(out, 0.2)
-        if self.pool:
-            out = F.avg_pool3d(out, (1, 2, 2))
-        return out
+            maps = []
+            for i in range(input.shape[2]):
+                maps.append(F.conv2d(input, weight=tw, bias=None, stride=self.stride,
+                                     padding=self.padding + 2 ** i - 1, dilation=2 ** i).unsqueeze(2))
+
+            y = torch.cat(maps, dim=2)
+            batch_size, _, scale_out, ny_out, nx_out = y.size()
+            y = y.view(batch_size, self.out_channels, self.output_stabilizer_size, scale_out, ny_out, nx_out)
+
+            if self.bias is not None:
+                bias = self.bias.view(1, self.out_channels, 1, 1, 1, 1)
+                y = y + bias
+
+            return y
+
+    def extra_repr(self):
+        return 'in_channels={}, out_channels={}, ' \
+               'scale_equivariance={}'.format(self.in_channels, self.out_channels, self.scale_equivariance)
+
+
+class P4ConvZ2(SplitGConv2D):
+    def __init__(self, *args, **kwargs):
+        super(P4ConvZ2, self).__init__(input_stabilizer_size=1, output_stabilizer_size=4, *args, **kwargs)
+
+
+class P4ConvP4(SplitGConv2D):
+    def __init__(self, *args, **kwargs):
+        super(P4ConvP4, self).__init__(input_stabilizer_size=4, output_stabilizer_size=4, *args, **kwargs)
+
+
+class P4MConvZ2(SplitGConv2D):
+    def __init__(self, *args, **kwargs):
+        super(P4MConvZ2, self).__init__(input_stabilizer_size=1, output_stabilizer_size=8, *args, **kwargs)
+
+
+class P4MConvP4M(SplitGConv2D):
+    def __init__(self, *args, **kwargs):
+        super(P4MConvP4M, self).__init__(input_stabilizer_size=8, output_stabilizer_size=8, *args, **kwargs)

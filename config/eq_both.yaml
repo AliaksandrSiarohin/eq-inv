@@ -10,15 +10,22 @@ generator_params:
   num_bottleneck_blocks: 6
   max_features: 91
   pool: 'avg'
-  upsample_mode: 'nearest'
+  upsample: 'nearest'
+  sn: False
+  group_pool: 'avg'
+  bn: 'instance'
+  scales: 1
 
 discriminator_params:
   equivariance: 'p4m'
+  scales: 1
   block_expansion: 22
   num_blocks: 4
   max_features: 182
   pool: 'avg'
   sn: False
+  bn: 'instance',
+  group_pool: 'avg'
 
 # Train parameters
 num_epochs: 200
