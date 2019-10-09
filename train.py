@@ -38,7 +38,7 @@ class Transform:
         grid = make_coordinate_grid(frame.shape[2:], type=frame.type()).unsqueeze(0)
         grid = grid.view(1, frame.shape[2] * frame.shape[3], 2)
         grid = self.warp_coordinates(grid).view(self.bs, frame.shape[2], frame.shape[3], 2)
-        return F.grid_sample(frame, grid, padding_mode="reflection")
+        return F.grid_sample(frame, grid)
 
     def warp_coordinates(self, coordinates):
         theta = self.theta.type(coordinates.type())
@@ -62,13 +62,13 @@ class Transform:
 
 
 def normalized_l1(a, b):
-    a = a.view(a.shape[0], -1)
-    b = b.view(b.shape[0], -1)
+    #a = a.view(a.shape[0], -1)
+    #b = b.view(b.shape[0], -1)
 
-    a = a / torch.norm(a, dim=1, keepdim=True)
-    b = b / torch.norm(b, dim=1, keepdim=True)
+    #a = a / torch.norm(a, dim=1, keepdim=True)
+    #b = b / torch.norm(b, dim=1, keepdim=True)
 
-    return torch.abs(a - b).sum()
+    return torch.abs(a - b).mean()
 
 
 class Trainer:
@@ -208,20 +208,20 @@ class Trainer:
                 if self.config['equivariance_loss_weight_generator'] != 0:
                     transform = Transform(images_generatedB.shape[0], **self.config['transform_params'])
                     images_A_transformed = transform.transform_frame(images_A)
-                    loss = normalized_l1(self.generatorB(images_A_transformed, source=True), images_generatedB)
+                    loss = normalized_l1(self.generatorB(images_A_transformed, source=True), 
+                                         transform.transform_frame(images_generatedB))
                     loss = self.config['equivariance_loss_weight_generator'] * loss
                     generator_loss += loss
-
-                    loss_dict['equivariance_loss_weight_generator_B'] += loss.detach().cpu().numpy()
+                    loss_dict['equivariance_generator_B'] += loss.detach().cpu().numpy()
 
                 if self.config['equivariance_loss_weight_generator'] != 0 and self.BtoA:
                     transform = Transform(images_generatedA.shape[0], **self.config['transform_params'])
                     images_B_transformed = transform.transform_frame(images_B)
-                    loss = normalized_l1(self.generatorA(images_B_transformed, source=True), images_generatedA)
+                    loss = normalized_l1(self.generatorB(images_B_transformed, source=True), 
+                                         transform.transform_frame(images_generatedA))
                     loss = self.config['equivariance_loss_weight_generator'] * loss
                     generator_loss += loss
-
-                    loss_dict['equivariance_loss_weight_generator_A'] += loss.detach().cpu().numpy()
+                    loss_dict['equivariance_generator_A'] += loss.detach().cpu().numpy()
 
                 if self.BtoA and self.config['cycle_loss_weight'] != 0 and self.BtoA:
                     images_cycled = self.generatorA(images_generatedB, source=True)
@@ -263,19 +263,18 @@ class Trainer:
 
                     transform = Transform(images_join.shape[0], **self.config['transform_params'])
                     images_transformed = transform.transform_frame(images_join)
-                    loss = normalized_l1(self.discriminatorB(images_transformed), logits_join)
+                    loss = normalized_l1(self.discriminatorB(images_transformed), 
+                                         transform.transform_frame(logits_join))
 
                     loss = self.config['equivariance_loss_weight_discriminator'] * loss
                     discriminator_loss += loss
-                    loss_dict['equivariance_loss_weight_discriminator_B'] += loss.detach().cpu().numpy()
+                    loss_dict['equivariance_discriminator_B'] += loss.detach().cpu().numpy()
 
                 discriminator_loss.backward()
 
                 self.optimizer_discriminatorB.step()
                 self.optimizer_discriminatorB.zero_grad()
                 self.optimizer_generatorB.zero_grad()
-
-                loss_dict['equivariance_loss_weight_generator_B'] += loss.detach().cpu().numpy()
 
                 if self.BtoA:
                     logits_fake = self.discriminatorA(images_generatedA.detach())
@@ -294,11 +293,12 @@ class Trainer:
 
                         transform = Transform(images_join.shape[0], **self.config['transform_params'])
                         images_transformed = transform.transform_frame(images_join)
-                        loss = normalized_l1(self.discriminatorA(images_transformed), logits_join)
+                        loss = normalized_l1(self.discriminatorA(images_transformed),
+                                             transform.transform_frame(logits_join))
 
                         loss = self.config['equivariance_loss_weight_discriminator'] * loss
                         discriminator_loss += loss
-                        loss_dict['equivariance_loss_weight_discriminator_B'] += loss.detach().cpu().numpy()
+                        loss_dict['equivariance_discriminator_B'] += loss.detach().cpu().numpy()
 
                     discriminator_loss.backward()
                     self.optimizer_discriminatorA.step()
