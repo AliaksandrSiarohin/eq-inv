@@ -58,14 +58,16 @@ class BN(nn.Module):
         super(BN, self).__init__()
 
         assert type in [None, 'bn', 'adabn', 'instance']
+        
+        self.type = type
+        if self.type is None:
+            return
 
         if type.endswith('bn'):
             self.norm_source = BatchNorm(in_features, affine=True)
         elif type == 'instance':
             self.norm_source = _InstanceNorm(in_features, affine=True)
-        else:
-            self.norm_source = Identity()
-            
+           
         if type == 'adabn':
             self.norm_target = BatchNorm(in_features, affine=True)
 
@@ -77,6 +79,8 @@ class BN(nn.Module):
         self.type = type
 
     def forward(self, x, source):
+        if self.type is None:
+            return x
         source = source or (self.norm_target is None)
 
         if source:
@@ -97,7 +101,7 @@ class Pool(nn.Module):
 
         if type == 'blur':
             self.pool = AntiAliasConv(stride=2)
-        else:
+        elif type == 'avg':
             self.pool = nn.AvgPool2d(kernel_size=2)
 
         self.type = type
@@ -165,7 +169,7 @@ class Conv(nn.Module):
             self.conv = nn.Conv2d(in_channels, out_channels, kernel_size=kernel_size, padding=padding)
         elif equivariance == 'p4m':
             self.conv = rot_layer(in_channels=in_channels, out_channels=out_channels,
-                                  kernel_size=kernel_size, padding=padding, scale_equivariance=(scales == 1))
+                                  kernel_size=kernel_size, padding=padding, scale_equivariance=(scales != 1))
 
         if sn:
             self.conv = nn.utils.spectral_norm(self.conv)
@@ -282,9 +286,12 @@ class Block2d(nn.Module):
     def forward(self, x, source=True):
         out = self.conv(x)
         if self.group_pool is not None:
-            pool_dim = list(range(2, len(self.group_pool) - 2))
+            pool_dim = list(range(2, len(out.shape) - 2))
+            if len(pool_dim) == 0:
+                return out
             if self.group_pool == 'max':
-                out = out.max(dim=pool_dim)[0]
+                for _ in pool_dim:
+                    out = out.max(dim=2)[0]
             elif self.group_pool == 'avg':
                 out = out.mean(dim=pool_dim)
             return out

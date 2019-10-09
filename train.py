@@ -131,15 +131,15 @@ class Trainer:
                 generator_loss = 0
                 images_generatedB = self.generatorB(images_A, source=True)
                 logits = self.discriminatorB(images_generatedB)
-                adversarial_loss = -logits.mean()
+                adversarial_loss = ((1 - logits) ** 2).mean()
                 adversarial_loss = self.config['adversarial_loss_weight'] * adversarial_loss
                 generator_loss += adversarial_loss
                 loss_dict['adversarial_loss_B'] += adversarial_loss.detach().cpu().numpy()
 
                 if self.BtoA:
-                    images_generatedA = self.generatorA(images_B)
-                    logits = self.discriminatorA(images_generatedA, source=True)
-                    adversarial_loss = -logits.mean()
+                    images_generatedA = self.generatorA(images_B, source=True)
+                    logits = self.discriminatorA(images_generatedA)
+                    adversarial_loss = ((1 - logits) ** 2).mean()
                     adversarial_loss = self.config['adversarial_loss_weight'] * adversarial_loss
                     generator_loss += adversarial_loss
                     loss_dict['adversarial_loss_A'] += adversarial_loss.detach().cpu().numpy()
@@ -170,8 +170,8 @@ class Trainer:
 
                 logits_fake = self.discriminatorB(images_generatedB.detach())
                 logits_real = self.discriminatorB(images_B)
-                loss_fake = torch.relu(1 + logits_fake).mean()
-                loss_real = torch.relu(1 - logits_real).mean()
+                loss_fake = (logits_fake ** 2).mean()
+                loss_real = ((1 - logits_real) ** 2).mean()
 
                 loss_dict['fake_loss_B'] += loss_fake.detach().cpu().numpy()
                 loss_dict['real_loss_B'] += loss_real.detach().cpu().numpy()
@@ -184,8 +184,8 @@ class Trainer:
                 if self.BtoA:
                     logits_fake = self.discriminatorA(images_generatedA.detach())
                     logits_real = self.discriminatorA(images_A)
-                    loss_fake = torch.relu(1 + logits_fake).mean()
-                    loss_real = torch.relu(1 - logits_real).mean()
+                    loss_fake = (logits_fake ** 2).mean()
+                    loss_real = ((1 - logits_real) ** 2).mean()
 
                     loss_dict['fake_loss_A'] += loss_fake.detach().cpu().numpy()
                     loss_dict['real_loss_A'] += loss_real.detach().cpu().numpy()
