@@ -305,41 +305,41 @@ class Trainer:
                     self.optimizer_discriminatorA.zero_grad()
                     self.optimizer_generatorA.zero_grad()
 
-            iteration_count += 1
+                iteration_count += 1
 
-        with torch.no_grad():
-            if not self.BtoA:
-                self.generatorB.eval()
-                transformed = transform_fixed.transform_frame(images_fixed['A'])
-                self.logger.save_images(self.epoch, images_fixed['A'],
-                                        self.generatorB(images_fixed['A'], source=True),
-                                        transformed, self.generatorB(transformed, source=True))
-                self.generatorB.train()
-            else:
-                self.generatorA.eval()
-                self.generatorB.eval()
+            with torch.no_grad():
+                if not self.BtoA:
+                    self.generatorB.eval()
+                    transformed = transform_fixed.transform_frame(images_fixed['A'])
+                    self.logger.save_images(self.epoch, images_fixed['A'],
+                                            self.generatorB(images_fixed['A'], source=True),
+                                            transformed, self.generatorB(transformed, source=True))
+                    self.generatorB.train()
+                else:
+                    self.generatorA.eval()
+                    self.generatorB.eval()
 
-                images_generatedB = self.generatorB(images_fixed['A'], source=True)
-                images_generatedA = self.generatorA(images_fixed['B'], source=True)
+                    images_generatedB = self.generatorB(images_fixed['A'], source=True)
+                    images_generatedA = self.generatorA(images_fixed['B'], source=True)
 
-                transformed = transform_fixed.transform_frame(images_fixed['A'])
-                self.logger.save_images(self.epoch,
-                                        images_fixed['A'], images_generatedB,
-                                        transformed, self.generatorB(transformed, source=True),
-                                        self.generatorA(images_generatedB, source=True), images_fixed['B'],
-                                        images_generatedA, self.generatorB(images_generatedA, source=True))
+                    transformed = transform_fixed.transform_frame(images_fixed['A'])
+                    self.logger.save_images(self.epoch,
+                                            images_fixed['A'], images_generatedB,
+                                            transformed, self.generatorB(transformed, source=True),
+                                            self.generatorA(images_generatedB, source=True), images_fixed['B'],
+                                            images_generatedA, self.generatorB(images_generatedA, source=True))
 
-                self.generatorA.train()
-                self.generatorB.train()
+                    self.generatorA.train()
+                    self.generatorB.train()
 
-        self.scheduler_generatorB.step()
-        self.scheduler_discriminatorB.step()
-        if self.BtoA:
-            self.scheduler_generatorA.step()
-            self.scheduler_discriminatorA.step()
+            self.scheduler_generatorB.step()
+            self.scheduler_discriminatorB.step()
+            if self.BtoA:
+                self.scheduler_generatorA.step()
+                self.scheduler_discriminatorA.step()
 
-        save_dict = {key: value / iteration_count for key, value in loss_dict.items()}
-        save_dict['lr'] = self.optimizer_generatorB.param_groups[0]['lr']
+            save_dict = {key: value / iteration_count for key, value in loss_dict.items()}
+            save_dict['lr'] = self.optimizer_generatorB.param_groups[0]['lr']
 
-        self.logger.log(self.epoch, save_dict)
-        self.save()
+            self.logger.log(self.epoch, save_dict)
+            self.save()
