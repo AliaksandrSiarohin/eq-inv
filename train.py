@@ -20,7 +20,7 @@ class Transform:
         self.theta = noise + torch.eye(2, 3).view(1, 2, 3)
 
         if 'flips' in kwargs and kwargs['flips']:
-            flips = (torch.randint(2, dtype=self.theta.type(), size=self.theta.shape) - 0.5) * 2
+            flips = (torch.randint(2, size=tuple(self.theta.shape)).type(self.theta.type()) - 0.5) * 2
             self.theta = self.theta * flips
 
         self.bs = bs
