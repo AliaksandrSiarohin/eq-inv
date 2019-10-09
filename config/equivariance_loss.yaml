@@ -1,0 +1,45 @@
+# Main parameters
+root_dir: '../pytorch-CycleGAN-and-pix2pix/datasets/cityscapes'
+load_size: 146
+crop_size: 128
+# Architecre Parameters
+
+generator_params:
+  equivariance: null
+  block_expansion: 64
+  num_down_blocks: 2
+  num_bottleneck_blocks: 6
+  pool: 'avg'
+  upsample: 'nearest'
+  sn: False
+  group_pool: 'max'
+  bn: 'instance'
+  scales: 1
+
+discriminator_params:
+  equivariance: null
+  scales: 1
+  block_expansion: 64
+  num_blocks: 4
+  pool: 'avg'
+  sn: False
+  bn: 'instance'
+  group_pool: 'max'
+
+transform_params:
+  sigma_affine: 0.1
+  sigma_tps: 0.005
+  points_tps: 5
+  flips: True
+
+# Train parameters
+num_epochs: 200
+
+lr_generator: 2.0e-4
+lr_discriminator: 2.0e-4
+bs: 4
+
+identity_loss_weight: 5
+cycle_loss_weight: 0
+adversarial_loss_weight: 1
+
