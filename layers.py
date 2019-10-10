@@ -269,7 +269,7 @@ class Block2d(nn.Module):
                  bn_type='instance', pool_type='avg', activation='relu', lift=False, group_pool=None, sn=False):
         super(Block2d, self).__init__()
         assert activation in ['relu', 'leaky_relu']
-        assert group_pool in [None, 'avg', 'max']
+        assert group_pool in [None, 'avg', 'max', 'identity', 'linear']
         self.conv = Conv(in_channels=in_features, out_channels=out_features, kernel_size=kernel_size,
                          padding=padding, equivariance=equivariance, lift=lift, sn=sn, scales=scales)
 
@@ -283,17 +283,23 @@ class Block2d(nn.Module):
 
         self.group_pool = group_pool
 
+        if self.group_pool == 'linear':
+            self.linear_project = nn.Conv3d(out_features, out_features, groups=out_features,
+                                            kernel_size=(scales * 8, 1, 1))
+
     def forward(self, x, source=True):
         out = self.conv(x)
         if self.group_pool is not None:
-            pool_dim = list(range(2, len(out.shape) - 2))
-            if len(pool_dim) == 0:
+            if len(out.shape) == 4 or self.group_pool == 'identity':
                 return out
+            shape = out.shape
+            out = out.view(shape[0], shape[1], -1, shape[-2], shape[-1])
             if self.group_pool == 'max':
-                for _ in pool_dim:
-                    out = out.max(dim=2)[0]
+                out = out.max(dim=2)[0]
             elif self.group_pool == 'avg':
-                out = out.mean(dim=pool_dim)
+                out = out.mean(dim=2)
+            elif self.group_pool == 'linear':
+                out = self.linear_project(out).squeeze(2)
             return out
         out = self.norm(out, source)
         out = F.relu(out)
