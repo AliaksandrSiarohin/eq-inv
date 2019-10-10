@@ -12,7 +12,7 @@ generator_params:
   pool: 'avg'
   upsample: 'nearest'
   sn: False
-  group_pool: 'max'
+  group_pool: 'linear'
   bn: 'instance'
   scales: 1
 
@@ -22,13 +22,20 @@ discriminator_params:
   block_expansion: 22
   num_blocks: 4
   pool: 'avg'
-  sn: False
-  bn: 'instance'
-  group_pool: 'max'
+  sn: True
+  bn: null
+  group_pool: 'identity'
 
+transform_params:
+  sigma_affine: 0.1
+  sigma_tps: 0.005
+  points_tps: 5
+  flips: True
+
+
+gan_loss_type: 'lsgan'
 # Train parameters
 num_epochs: 200
-
 lr_generator: 2.0e-4
 lr_discriminator: 2.0e-4
 bs: 4
@@ -36,4 +43,5 @@ bs: 4
 identity_loss_weight: 5
 cycle_loss_weight: 0
 adversarial_loss_weight: 1
-
+equivariance_loss_weight_generator: 0
+equivariance_loss_weight_discriminator: 0

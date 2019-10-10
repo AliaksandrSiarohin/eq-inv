@@ -1,5 +1,5 @@
 import torch
-
+import torch.nn.functional as F
 
 def denorm(x):
     out = (x + 1) / 2
@@ -29,7 +29,7 @@ def gan_loss_generator(logits_fake, loss_type):
     if loss_type == 'lsgan':
         loss = ((1 - logits_fake) ** 2).mean()
     elif loss_type == 'hinge':
-        loss = -logits_fake.mena()
+        loss = -logits_fake.mean()
     return loss
 
 

@@ -8,8 +8,6 @@ class Generator(nn.Module):
     def __init__(self, num_channels=3, block_expansion=64, num_down_blocks=2, num_bottleneck_blocks=6,
                  equivariance=None, scales=1, pool='avg', upsample='nearest', sn=False, bn='instance',
                  group_pool='avg'):
-        assert group_pool in ['max', 'avg']
-
         super(Generator, self).__init__()
 
         self.first = Block2d(num_channels, block_expansion, kernel_size=7, padding=3, pool_type=None,
@@ -63,7 +61,6 @@ class Discriminator(nn.Module):
     def __init__(self, num_channels=3, block_expansion=64, num_blocks=4,
                  equivariance=None, scales=1, pool='avg', sn=False, bn='instance', group_pool='avg'):
         super(Discriminator, self).__init__()
-        assert group_pool in ['max', 'avg']
 
         blocks = []
         for i in range(num_blocks):
