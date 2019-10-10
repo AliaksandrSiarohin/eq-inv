@@ -42,4 +42,5 @@ bs: 4
 identity_loss_weight: 5
 cycle_loss_weight: 0
 adversarial_loss_weight: 1
-
+equivariance_loss_weight_generator: 1
+equivariance_loss_weight_discriminator: 1
