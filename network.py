@@ -72,7 +72,7 @@ class Discriminator(nn.Module):
                             activation='leaky_relu')
             blocks.append(block)
 
-        blocks.append(Block2d(out_channels, 1, kernel_size=1, padding=1,
+        blocks.append(Block2d(out_channels, 1, kernel_size=1, padding=0,
                               bn_type=None, pool_type=None, group_pool=group_pool,
                               sn=sn, equivariance=equivariance, scales=scales))
 

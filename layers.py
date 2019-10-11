@@ -82,11 +82,17 @@ class BN(nn.Module):
         if self.type is None:
             return x
         source = source or (self.norm_target is None)
+        shape = x.shape
+        if len(shape) >= 6:
+            x = x.view(shape[0], shape[1], -1)
 
         if source:
             out = self.norm_source(x)
         else:
             out = self.norm_target(x)
+
+        if len(shape) >= 6:
+            out = out.view(shape)
 
         return out
 
@@ -193,14 +199,14 @@ class Conv(nn.Module):
         if self.lift and self.scales != 1:
             maps = []
             for module in self.pyramide:
-                maps.append(module(input).unsqueeze(0))
+                maps.append(module(input).unsqueeze(2))
             input = torch.cat(maps, dim=2)
-
+ 
         if self.scales != 1 and self.equivariance != 'p4m':
             maps = []
             for i in range(input.shape[2]):
-                maps.append(F.conv2d(input, weight=self.conv.weight, bias=self.conv.bias, stride=self.stride,
-                                     padding=self.padding + 2 ** i - 1, dilation=2 ** i).unsqueeze(2))
+                maps.append(F.conv2d(input[:, :, i], weight=self.conv.weight, bias=self.conv.bias, stride=self.stride,
+                                     padding=self.padding * 2 ** i, dilation=2 ** i).unsqueeze(2))
 
             out = torch.cat(maps, dim=2)
             return out
