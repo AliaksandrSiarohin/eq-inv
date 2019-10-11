@@ -94,8 +94,9 @@ class SplitGConv2D(nn.Module):
 
             maps = []
             for i in range(input.shape[2]):
-                maps.append(F.conv2d(input, weight=tw, bias=None, stride=self.stride,
-                                     padding=self.padding + 2 ** i - 1, dilation=2 ** i).unsqueeze(2))
+                padding = self.padding[0] * 2 ** i
+                maps.append(F.conv2d(input[:, :, i], weight=tw, bias=None, stride=self.stride,
+                                     padding=padding, dilation=2 ** i).unsqueeze(2))
 
             y = torch.cat(maps, dim=2)
             batch_size, _, scale_out, ny_out, nx_out = y.size()
