@@ -10,7 +10,7 @@ from tqdm import tqdm
 from ab_dataset import ABDataset
 from network import Generator, Discriminator
 from sync_batchnorm import DataParallelWithCallback
-from util import Transform, gan_loss_generator, gan_loss_discriminator, l1
+from util import Transform, gan_loss_generator, gan_loss_discriminator, l1, corr
 
 
 class Trainer:
@@ -150,7 +150,7 @@ class Trainer:
                 if self.config['equivariance_loss_weight_generator'] != 0:
                     transform = Transform(images_generatedB.shape[0], **self.config['transform_params'])
                     images_A_transformed = transform.transform_frame(images_A)
-                    loss = l1(self.generatorB(images_A_transformed, source=True),
+                    loss = corr(self.generatorB(images_A_transformed, source=True),
                               transform.transform_frame(images_generatedB))
                     loss = self.config['equivariance_loss_weight_generator'] * loss
                     generator_loss += loss
@@ -159,7 +159,7 @@ class Trainer:
                 if self.config['equivariance_loss_weight_generator'] != 0 and self.BtoA:
                     transform = Transform(images_generatedA.shape[0], **self.config['transform_params'])
                     images_B_transformed = transform.transform_frame(images_B)
-                    loss = l1(self.generatorB(images_B_transformed, source=True),
+                    loss = corr(self.generatorB(images_B_transformed, source=True),
                               transform.transform_frame(images_generatedA))
                     loss = self.config['equivariance_loss_weight_generator'] * loss
                     generator_loss += loss
@@ -200,7 +200,7 @@ class Trainer:
 
                     transform = Transform(images_join.shape[0], **self.config['transform_params'])
                     images_transformed = transform.transform_frame(images_join)
-                    loss = l1(self.discriminatorB(images_transformed),
+                    loss = corr(self.discriminatorB(images_transformed),
                                          transform.transform_frame(logits_join))
 
                     loss = self.config['equivariance_loss_weight_discriminator'] * loss
@@ -225,7 +225,7 @@ class Trainer:
 
                         transform = Transform(images_join.shape[0], **self.config['transform_params'])
                         images_transformed = transform.transform_frame(images_join)
-                        loss = l1(self.discriminatorA(images_transformed),
+                        loss = corr(self.discriminatorA(images_transformed),
                                              transform.transform_frame(logits_join))
 
                         loss = self.config['equivariance_loss_weight_discriminator'] * loss

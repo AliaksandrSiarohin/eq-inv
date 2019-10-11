@@ -90,5 +90,16 @@ class Transform:
         return transformed
 
 
+def corr(a, b):
+    a = a.view(a.shape[0], -1)
+    b = b.view(b.shape[0], -1)
+
+    vx = a - torch.mean(a, dim=1, keepdim=True)
+    vy = b - torch.mean(b, dim=1, keepdim=True)
+
+    cost = torch.sum(vx * vy, dim=1) / (torch.sqrt(torch.sum(vx ** 2, dim=1)) * torch.sqrt(torch.sum(vy ** 2, dim=1)))
+    
+    return -cost.mean()
+
 def l1(a, b):
     return torch.abs(a - b).mean()

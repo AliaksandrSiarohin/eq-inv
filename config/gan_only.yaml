@@ -22,8 +22,8 @@ discriminator_params:
   block_expansion: 64
   num_blocks: 4
   pool: 'avg'
-  sn: False
-  bn: 'instance'
+  sn: True
+  bn: null
   group_pool: 'max'
 
 transform_params:
@@ -32,9 +32,10 @@ transform_params:
   points_tps: 5
   flips: True
 
+
+gan_loss_type: 'lsgan'
 # Train parameters
 num_epochs: 200
-
 lr_generator: 2.0e-4
 lr_discriminator: 2.0e-4
 bs: 4
