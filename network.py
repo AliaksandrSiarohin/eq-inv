@@ -58,7 +58,7 @@ class Generator(nn.Module):
 
 
 class Discriminator(nn.Module):
-    def __init__(self, num_channels=3, block_expansion=64, num_blocks=4,
+    def __init__(self, num_channels=3, block_expansion=64, num_blocks=4, kernel_size=4,
                  equivariance=None, scales=1, pool='avg', sn=False, bn='instance', group_pool='avg'):
         super(Discriminator, self).__init__()
 
@@ -68,7 +68,8 @@ class Discriminator(nn.Module):
             out_channels = block_expansion * (2 ** i)
             block = Block2d(in_channels, out_channels, bn_type=None if (i == 0) else bn,
                             lift=(i == 0), equivariance=equivariance, scales=scales, sn=sn,
-                            kernel_size=5, padding=2, pool_type=None if (i == num_blocks - 1) else pool,
+                            kernel_size=kernel_size, padding=(kernel_size - 1) // 2,
+                            pool_type=None if (i == num_blocks - 1) else pool,
                             activation='leaky_relu')
             blocks.append(block)
 

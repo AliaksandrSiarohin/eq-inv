@@ -165,16 +165,16 @@ class Upsample(nn.Module):
 
 class Conv(nn.Module):
     def __init__(self, in_channels, out_channels, equivariance, kernel_size=(3, 3), padding=(1, 1), lift=False,
-                 scales=4, sn=False):
+                 scales=4, sn=False, stride=1):
         super(Conv, self).__init__()
         assert equivariance in [None, 'p4m']
 
         rot_layer = P4MConvZ2 if lift else P4MConvP4M
 
         if equivariance is None:
-            self.conv = nn.Conv2d(in_channels, out_channels, kernel_size=kernel_size, padding=padding)
+            self.conv = nn.Conv2d(in_channels, out_channels, kernel_size=kernel_size, padding=padding, stride=stride)
         elif equivariance == 'p4m':
-            self.conv = rot_layer(in_channels=in_channels, out_channels=out_channels,
+            self.conv = rot_layer(in_channels=in_channels, out_channels=out_channels, stride=stride,
                                   kernel_size=kernel_size, padding=padding, scale_equivariance=(scales != 1))
 
         if sn:
@@ -277,10 +277,11 @@ class Block2d(nn.Module):
         assert activation in ['relu', 'leaky_relu']
         assert group_pool in [None, 'avg', 'max', 'identity', 'linear']
         self.conv = Conv(in_channels=in_features, out_channels=out_features, kernel_size=kernel_size,
-                         padding=padding, equivariance=equivariance, lift=lift, sn=sn, scales=scales)
+                         padding=padding, equivariance=equivariance, lift=lift, sn=sn, scales=scales,
+                         stride=2 if (pool_type == 'stride') else 1)
 
         self.norm = BN(out_features, type=bn_type)
-        self.pool = Pool(type=pool_type)
+        self.pool = Pool(type=pool_type if pool_type != 'stride' else None)
 
         if activation == 'relu':
             self.activation = nn.ReLU

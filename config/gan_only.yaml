@@ -1,7 +1,7 @@
 # Main parameters
-root_dir: '../pytorch-CycleGAN-and-pix2pix/datasets/cityscapes'
-load_size: 146
-crop_size: 128
+root_dir: '../pytorch-CycleGAN-and-pix2pix/datasets/horse2zebra'
+load_size: 286
+crop_size: 256
 # Architecre Parameters
 
 generator_params:
@@ -9,10 +9,10 @@ generator_params:
   block_expansion: 64
   num_down_blocks: 2
   num_bottleneck_blocks: 6
-  pool: 'avg'
-  upsample: 'nearest'
+  pool: 'blur'
+  upsample: 'bilinear'
   sn: False
-  group_pool: 'max'
+  group_pool: 'avg'
   bn: 'instance'
   scales: 1
 
@@ -24,7 +24,7 @@ discriminator_params:
   pool: 'avg'
   sn: True
   bn: null
-  group_pool: 'max'
+  group_pool: 'identity'
 
 transform_params:
   sigma_affine: 0.1
