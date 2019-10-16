@@ -8,12 +8,12 @@ generator_params:
   equivariance: null
   block_expansion: 64
   num_down_blocks: 2
-  num_bottleneck_blocks: 6
+  num_bottleneck_blocks: 9
   pool: 'blur'
   upsample: 'bilinear'
   sn: False
   group_pool: 'avg'
-  bn: 'instance'
+  bn: 'adabn'
   scales: 1
 
 discriminator_params:
@@ -38,7 +38,7 @@ gan_loss_type: 'lsgan'
 num_epochs: 200
 lr_generator: 2.0e-4
 lr_discriminator: 2.0e-4
-bs: 4
+bs: 16
 
 identity_loss_weight: 5
 cycle_loss_weight: 0
